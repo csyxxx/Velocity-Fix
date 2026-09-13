@@ -1,0 +1,6 @@
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/lua.dir
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/edit_cache.dir
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/rebuild_cache.dir
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/list_install_components.dir
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/install.dir
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg/CMakeFiles/install/local.dir

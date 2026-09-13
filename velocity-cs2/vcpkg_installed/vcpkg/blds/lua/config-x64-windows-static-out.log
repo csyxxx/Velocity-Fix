@@ -1,0 +1,50 @@
+[1/2] "C:/Users/Administrator/AppData/Local/vcpkg/downloads/tools/cmake-4.3.2-windows/cmake-4.3.2-windows-x86_64/bin/cmake.exe" -E chdir ".." "C:/Users/Administrator/AppData/Local/vcpkg/downloads/tools/cmake-4.3.2-windows/cmake-4.3.2-windows-x86_64/bin/cmake.exe" "D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/src/lua-5-946a01d0af.clean" "-G" "Ninja" "-DCMAKE_BUILD_TYPE=Release" "-DCMAKE_INSTALL_PREFIX=D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static" "-DFETCHCONTENT_FULLY_DISCONNECTED=ON" "-DCOMPILE_AS_CPP=OFF" "-DINSTALL_TOOLS=OFF" "-DVERSION=5.5.0" "-DCMAKE_MAKE_PROGRAM=D:\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe" "-DBUILD_SHARED_LIBS=OFF" "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=D:/Microsoft Visual Studio/18/Community/VC/vcpkg/scripts/toolchains/windows.cmake" "-DVCPKG_TARGET_TRIPLET=x64-windows-static" "-DVCPKG_SET_CHARSET_FLAG=ON" "-DVCPKG_PLATFORM_TOOLSET=v145" "-DCMAKE_EXPORT_NO_PACKAGE_REGISTRY=ON" "-DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON" "-DCMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY=ON" "-DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=TRUE" "-DCMAKE_VERBOSE_MAKEFILE=ON" "-DVCPKG_APPLOCAL_DEPS=OFF" "-DCMAKE_TOOLCHAIN_FILE=D:/Microsoft Visual Studio/18/Community/VC/vcpkg/scripts/buildsystems/vcpkg.cmake" "-DCMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION=ON" "-DVCPKG_CXX_FLAGS=" "-DVCPKG_CXX_FLAGS_RELEASE=" "-DVCPKG_CXX_FLAGS_DEBUG=" "-DVCPKG_C_FLAGS=" "-DVCPKG_C_FLAGS_RELEASE=" "-DVCPKG_C_FLAGS_DEBUG=" "-DVCPKG_CRT_LINKAGE=static" "-DVCPKG_LINKER_FLAGS=" "-DVCPKG_LINKER_FLAGS_RELEASE=" "-DVCPKG_LINKER_FLAGS_DEBUG=" "-DVCPKG_TARGET_ARCHITECTURE=x64" "-DCMAKE_INSTALL_LIBDIR:STRING=lib" "-DCMAKE_INSTALL_BINDIR:STRING=bin" "-D_VCPKG_ROOT_DIR=D:/Microsoft Visual Studio/18/Community/VC/vcpkg" "-D_VCPKG_INSTALLED_DIR=D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed" "-DVCPKG_MANIFEST_INSTALL=OFF"
+-- The C compiler identification is MSVC 19.51.36252.0
+-- The CXX compiler identification is MSVC 19.51.36252.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: D:/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: D:/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (1.8s)
+-- Generating done (0.0s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_INSTALL_BINDIR
+    CMAKE_INSTALL_LIBDIR
+    FETCHCONTENT_FULLY_DISCONNECTED
+    _VCPKG_ROOT_DIR
+
+
+-- Build files have been written to: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-rel
+[2/2] "C:/Users/Administrator/AppData/Local/vcpkg/downloads/tools/cmake-4.3.2-windows/cmake-4.3.2-windows-x86_64/bin/cmake.exe" -E chdir "../../x64-windows-static-dbg" "C:/Users/Administrator/AppData/Local/vcpkg/downloads/tools/cmake-4.3.2-windows/cmake-4.3.2-windows-x86_64/bin/cmake.exe" "D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/src/lua-5-946a01d0af.clean" "-G" "Ninja" "-DCMAKE_BUILD_TYPE=Debug" "-DCMAKE_INSTALL_PREFIX=D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/debug" "-DFETCHCONTENT_FULLY_DISCONNECTED=ON" "-DCOMPILE_AS_CPP=OFF" "-DINSTALL_TOOLS=OFF" "-DVERSION=5.5.0" "-DCMAKE_MAKE_PROGRAM=D:\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe" "-DBUILD_SHARED_LIBS=OFF" "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=D:/Microsoft Visual Studio/18/Community/VC/vcpkg/scripts/toolchains/windows.cmake" "-DVCPKG_TARGET_TRIPLET=x64-windows-static" "-DVCPKG_SET_CHARSET_FLAG=ON" "-DVCPKG_PLATFORM_TOOLSET=v145" "-DCMAKE_EXPORT_NO_PACKAGE_REGISTRY=ON" "-DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=ON" "-DCMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY=ON" "-DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=TRUE" "-DCMAKE_VERBOSE_MAKEFILE=ON" "-DVCPKG_APPLOCAL_DEPS=OFF" "-DCMAKE_TOOLCHAIN_FILE=D:/Microsoft Visual Studio/18/Community/VC/vcpkg/scripts/buildsystems/vcpkg.cmake" "-DCMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION=ON" "-DVCPKG_CXX_FLAGS=" "-DVCPKG_CXX_FLAGS_RELEASE=" "-DVCPKG_CXX_FLAGS_DEBUG=" "-DVCPKG_C_FLAGS=" "-DVCPKG_C_FLAGS_RELEASE=" "-DVCPKG_C_FLAGS_DEBUG=" "-DVCPKG_CRT_LINKAGE=static" "-DVCPKG_LINKER_FLAGS=" "-DVCPKG_LINKER_FLAGS_RELEASE=" "-DVCPKG_LINKER_FLAGS_DEBUG=" "-DVCPKG_TARGET_ARCHITECTURE=x64" "-DCMAKE_INSTALL_LIBDIR:STRING=lib" "-DCMAKE_INSTALL_BINDIR:STRING=bin" "-D_VCPKG_ROOT_DIR=D:/Microsoft Visual Studio/18/Community/VC/vcpkg" "-D_VCPKG_INSTALLED_DIR=D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed" "-DVCPKG_MANIFEST_INSTALL=OFF" "-DINSTALL_TOOLS=OFF"
+-- The C compiler identification is MSVC 19.51.36252.0
+-- The CXX compiler identification is MSVC 19.51.36252.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: D:/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: D:/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (1.8s)
+-- Generating done (0.1s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    CMAKE_INSTALL_BINDIR
+    CMAKE_INSTALL_LIBDIR
+    FETCHCONTENT_FULLY_DISCONNECTED
+    _VCPKG_ROOT_DIR
+
+
+-- Build files have been written to: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/x64-windows-static-dbg

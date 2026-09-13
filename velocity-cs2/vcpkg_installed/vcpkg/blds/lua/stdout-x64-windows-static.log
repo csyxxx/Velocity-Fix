@@ -1,0 +1,13 @@
+Downloading https://www.lua.org/ftp/lua-5.5.0.tar.gz -> lua-5.5.0.tar.gz
+Successfully downloaded lua-5.5.0.tar.gz
+-- Extracting source C:/Users/Administrator/AppData/Local/vcpkg/downloads/lua-5.5.0.tar.gz
+-- Applying patch vs2015-impl-c99.patch
+-- Applying patch fix-ios-system.patch
+-- Applying patch uwp-no-popen.diff
+-- Using source at D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/lua/src/lua-5-946a01d0af.clean
+-- Configuring x64-windows-static
+-- Building x64-windows-static-dbg
+-- Building x64-windows-static-rel
+-- Installing: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/share/lua/vcpkg-cmake-wrapper.cmake
+-- Installing: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/share/lua/usage
+-- 正在执行生成后验证

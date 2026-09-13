@@ -1,0 +1,11 @@
+Checking patch CMakeLists.txt...
+Hunk #1 succeeded at 478 (offset 150 lines).
+Checking patch include/freetype/freetype.h...
+Hunk #1 succeeded at 1226 (offset 188 lines).
+Hunk #2 succeeded at 2302 (offset 387 lines).
+Checking patch src/base/ftobjs.c...
+Hunk #1 succeeded at 574 (offset 46 lines).
+Hunk #2 succeeded at 1358 (offset 160 lines).
+Applied patch CMakeLists.txt cleanly.
+Applied patch include/freetype/freetype.h cleanly.
+Applied patch src/base/ftobjs.c cleanly.

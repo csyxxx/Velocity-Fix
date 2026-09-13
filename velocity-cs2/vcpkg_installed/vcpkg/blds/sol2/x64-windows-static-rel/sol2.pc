@@ -1,0 +1,6 @@
+includedir=D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/sol2_x64-windows-static/include
+
+Name: sol2
+Description: C++ <-> Lua Wrapper Library
+Version: 4.0.0
+Cflags: -I${includedir}

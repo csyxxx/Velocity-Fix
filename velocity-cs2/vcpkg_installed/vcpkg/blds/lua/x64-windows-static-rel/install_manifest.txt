@@ -1,0 +1,9 @@
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/include/lualib.h
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/include/lua.h
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/include/luaconf.h
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/include/lauxlib.h
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/include/lua.hpp
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/lib/lua.lib
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/share/unofficial-lua/unofficial-lua-config-version.cmake
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/share/unofficial-lua/unofficial-lua-config.cmake
+D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/lua_x64-windows-static/share/unofficial-lua/unofficial-lua-config-release.cmake

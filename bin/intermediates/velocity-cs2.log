@@ -1,0 +1,9 @@
+﻿project\core\features\combat\impl\rage.cpp(657,5): warning : ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+project\core\features\combat\impl\rage.cpp(666,5): warning : ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
+project\core\features\combat\impl\rage.cpp(2008,14): warning : unused variable 'primary_eye' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4256,15): warning : unused variable 'verified_seed' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4383,15): warning : unused variable 'local_velocity' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4021,8): warning : unused variable 'seed_base_angle' [-Wunused-variable]
+  velocity-cs2.vcxproj -> D:\velocity-fixed\velocity-fixed-main\cs2\bin\velocity-cs2-dev.dll
+  'pwsh.exe' 不是内部或外部命令，也不是可运行的程序
+  或批处理文件。

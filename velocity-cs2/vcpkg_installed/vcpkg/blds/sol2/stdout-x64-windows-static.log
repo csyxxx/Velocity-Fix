@@ -1,0 +1,15 @@
+Downloading https://github.com/ThePhD/sol2/archive/v3.5.0.tar.gz -> ThePhD-sol2-v3.5.0.tar.gz
+Successfully downloaded ThePhD-sol2-v3.5.0.tar.gz
+-- Extracting source C:/Users/Administrator/AppData/Local/vcpkg/downloads/ThePhD-sol2-v3.5.0.tar.gz
+-- Applying patch header-only.patch
+-- Applying patch lua-5.5.diff
+-- Applying patch pkgconfig.diff
+-- Using source at D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/blds/sol2/src/v3.5.0-f13bb4a017.clean
+-- Configuring x64-windows-static
+-- Building x64-windows-static-rel
+-- Fixing pkgconfig file: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/sol2_x64-windows-static/share/pkgconfig/sol2.pc
+-- Using cached msys2-mingw-w64-x86_64-pkgconf-1~2.5.1-1-any.pkg.tar.zst
+-- Using cached msys2-msys2-runtime-3.6.5-1-x86_64.pkg.tar.zst
+-- Using msys root at C:/Users/Administrator/AppData/Local/vcpkg/downloads/tools/msys2/3e71d1f8e22ab23f
+-- Installing: D:/velocity-fixed/velocity-fixed-main/cs2/velocity-cs2/vcpkg_installed/vcpkg/pkgs/sol2_x64-windows-static/share/sol2/copyright
+-- 正在执行生成后验证
