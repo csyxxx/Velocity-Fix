@@ -741,7 +741,7 @@ namespace features::combat {
 			return false;
 		}
 
-		const auto effective_budget = budget > 0.0f ? budget : 0.05f;
+		const auto effective_budget = budget >= 0.0f ? budget : 0.05f;
 		return this->simulation_time >= current_time - effective_budget;
 	}
 
@@ -930,7 +930,7 @@ namespace features::combat {
 		return nullptr;
 	}
 
-	std::optional<shared::lagcomp::visual_record> shared::lagcomp::get_oldest_was_valid_visual( std::uintptr_t pawn ) const
+	std::optional<shared::lagcomp::visual_record> shared::lagcomp::get_oldest_valid_visual( std::uintptr_t pawn ) const
 	{
 		if ( !detail::is_alive_player_pawn( pawn ) )
 		{
@@ -947,17 +947,15 @@ namespace features::combat {
 
 		for ( auto rit = it->second.rbegin( ); rit != it->second.rend( ); ++rit )
 		{
-			if ( !rit->was_valid )
+			if ( !rit->is_valid( ) || rit->bone_count <= 0 )
 			{
 				continue;
 			}
 
 			visual_record out{};
 			out.origin = rit->origin;
-			for ( auto i = 0; i < 27; ++i )
-			{
-				out.bones[ i ] = rit->bones[ i ];
-			}
+			out.bone_count = std::clamp( rit->bone_count, 0, static_cast<int>( out.bones.size( ) ) );
+			std::copy_n( rit->bones, out.bone_count, out.bones.begin( ) );
 
 			return out;
 		}
@@ -1347,7 +1345,10 @@ namespace features::combat {
 						1,
 						lagcomp::k_max_history_ticks ) )
 					: 0.0f;
-				this->m_latency_budget = std::max( max_unlag - std::max( latency, 0.0f ), configured_history );
+				const auto server_history = std::max( max_unlag - std::max( latency, 0.0f ), 0.0f );
+				this->m_latency_budget = configured_history > 0.0f
+					? std::min( server_history, configured_history )
+					: server_history;
 			}
 		}
 
@@ -1361,6 +1362,16 @@ namespace features::combat {
 
 		this->m_ctx.current_tick = memory::read<int>( global_vars + 0x44 );
 		this->m_ctx.current_time = memory::read<float>( global_vars + 0x30 );
+		// The project historically assumed 64 tick everywhere.  Use the live
+		// GlobalVars interval for prediction/seed timing, and only allow the
+		// deterministic no-spread path when it is the expected 64 tick interval.
+		this->m_ctx.tick_interval = memory::read<float>( global_vars + 0x34 );
+		this->m_ctx.tickrate = ( std::isfinite( this->m_ctx.tick_interval ) && this->m_ctx.tick_interval > 0.0001f )
+			? static_cast< int >( std::lround( 1.0f / this->m_ctx.tick_interval ) )
+			: 0;
+		this->m_ctx.tickrate_normal = std::isfinite( this->m_ctx.tick_interval )
+			&& std::fabsf( this->m_ctx.tick_interval - cstypes::tick_interval ) <= 0.0005f
+			&& this->m_ctx.tickrate == 64;
 		this->m_ctx.is_scoped = memory::read<bool>( local.pawn + SCHEMA( "C_CSPlayerPawn", "m_bIsScoped"_hash ) );
 		this->m_ctx.ticks_since_land = this->m_ctx.current_tick - memory::read<int>( movement_services + SCHEMA( "CCSPlayer_MovementServices", "m_ModernJump"_hash ) + SCHEMA( "CCSPlayerModernJump", "m_nLastLandedTick"_hash ) );
 		this->m_ctx.weapon_services = memory::read<std::uintptr_t>( local.pawn + SCHEMA( "C_BasePlayerPawn", "m_pWeaponServices"_hash ) );
@@ -1593,32 +1604,11 @@ namespace features::combat {
 				: std::nullopt;
 		};
 
-		// Most bucket mismatches are local to the compensated pitch. Probe a
-		// narrow neighborhood first; retain the complete sweep as a correctness
-		// fallback for unusual weapons/angles.
-		const auto aim_seed = this->get_spread_seed( aim_angle, tick );
-		if ( aim_seed != 0 )
+		// Match the reference fixed-point search. The seed hash is not locally
+		// monotonic in pitch, so a narrow neighborhood can miss a valid bucket.
+		for ( auto i = 0; i < 4096; ++i )
 		{
-			const auto aim_spread = this->calculate_spread(
-				static_cast< int >( aim_seed ), this->m_ctx.inaccuracy, this->m_ctx.spread,
-				this->m_ctx.recoil_index, this->m_ctx.item_def_idx, this->m_ctx.num_bullets );
-			const auto lift = math::helpers::rad_to_deg(
-				std::atan( std::sqrt( aim_spread.x * aim_spread.x + aim_spread.y * aim_spread.y ) ) );
-			const auto center = aim_angle.x + lift;
-			for ( auto i = -4; i <= 4; ++i )
-			{
-				if ( const auto result = try_pitch( center + static_cast< float >( i ) * 0.5f ) )
-					return *result;
-			}
-		}
-
-		// A 256-probe half-degree window covers the full practical correction
-		// range while avoiding the duplicate normalized-pitch probes in the old
-		// 720-entry sweep.
-		const auto fallback_center = aim_angle.x;
-		for ( auto i = 0; i < 256; ++i )
-		{
-			if ( const auto result = try_pitch( fallback_center + ( static_cast< float >( i ) - 128.0f ) * 0.5f ) )
+			if ( const auto result = try_pitch( static_cast< float >( i ) * 0.5f ) )
 				return *result;
 		}
 
@@ -2027,13 +2017,52 @@ namespace features::combat {
 
 		const auto tick_base = memory::read<int>( local_controller + SCHEMA( "CBasePlayerController", "m_nTickBase"_hash ) );
 		const auto base_cmd = cmd->csgo_user_cmd.base( );
-		const auto client_tick = base_cmd ? base_cmd->client_tick( ) : tick_base;
+		auto client_tick = 0;
+		auto client_fraction = 0.0f;
+		for ( auto i = cmd->csgo_user_cmd.input_history_size( ) - 1; i >= 0; --i )
+		{
+			const auto entry = cmd->csgo_user_cmd.mutable_input_history( i );
+			if ( !entry )
+				continue;
+			if ( entry->has_player_tick_count( ) && entry->player_tick_count( ) > 0 )
+			{
+				client_tick = entry->player_tick_count( );
+				client_fraction = entry->has_player_tick_fraction( )
+					? std::clamp( entry->player_tick_fraction( ), 0.0f, 0.999999f )
+					: 0.0f;
+				break;
+			}
+			if ( entry->has_render_tick_count( ) && entry->render_tick_count( ) > 0 )
+			{
+				client_tick = entry->render_tick_count( );
+				client_fraction = entry->has_render_tick_fraction( )
+					? std::clamp( entry->render_tick_fraction( ), 0.0f, 0.999999f )
+					: 0.0f;
+				break;
+			}
+		}
+		if ( client_tick <= 0 && base_cmd && base_cmd->client_tick( ) > 0 )
+			client_tick = base_cmd->client_tick( );
+		if ( client_tick <= 0 )
+			client_tick = tick_base;
 		const auto next_primary = memory::read<int>( this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash ) );
+		auto next_primary_fraction = memory::read<float>(
+			this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_flNextPrimaryAttackTickRatio"_hash ) );
+		if ( !std::isfinite( next_primary_fraction ) )
+			return false;
+		next_primary_fraction = std::clamp( next_primary_fraction, 0.0f, 0.999999f );
+		const auto primary_ready = client_tick > next_primary ||
+			( client_tick == next_primary && client_fraction + 0.000001f >= next_primary_fraction );
 
 		if ( this->m_ctx.weapon_type == cstypes::weapon_type::knife )
 		{
 			const auto next_secondary = memory::read<int>( this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextSecondaryAttackTick"_hash ) );
-			return client_tick >= next_primary || client_tick >= next_secondary;
+			const auto next_secondary_fraction = std::clamp( memory::read<float>(
+				this->m_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_flNextSecondaryAttackTickRatio"_hash ) ),
+				0.0f, 0.999999f );
+			const auto secondary_ready = client_tick > next_secondary ||
+				( client_tick == next_secondary && client_fraction + 0.000001f >= next_secondary_fraction );
+			return primary_ready || secondary_ready;
 		}
 
 		if ( this->m_last_shoot_weapon == this->m_ctx.weapon && this->m_last_shoot_tick > 0 )
@@ -2045,7 +2074,7 @@ namespace features::combat {
 			}
 		}
 
-		return client_tick >= next_primary;
+		return primary_ready;
 	}
 
 	bool shared::is_max_accuracy( float inaccuracy ) const

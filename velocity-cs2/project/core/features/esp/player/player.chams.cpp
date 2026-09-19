@@ -347,13 +347,6 @@ namespace features::esp::player {
 
 			if ( !memory::read<bool>( p.ptr + SCHEMA( "CCSPlayerController", "m_bPawnIsAlive"_hash ) ) )
 			{
-				auto it = this->m_objects.find( p.ptr );
-				if ( it != this->m_objects.end( ) )
-				{
-					it->second.destroy( );
-					this->m_objects.erase( it );
-				}
-
 				continue;
 			}
 
@@ -384,7 +377,7 @@ namespace features::esp::player {
 				continue;
 			}
 
-			const auto oldest = combat::g_shared.lc( ).get_oldest_was_valid( pawn );
+			const auto oldest = combat::g_shared.lc( ).get_oldest_valid_visual( pawn );
 			if ( !oldest )
 			{
 				auto it = this->m_objects.find( pawn );
@@ -426,7 +419,7 @@ namespace features::esp::player {
 
 			active.insert( pawn );
 			obj.active = true;
-			obj.setup_bones( oldest->bones, oldest->bone_count );
+			obj.setup_bones( oldest->bones.data( ), oldest->bone_count );
 		}
 
 		for ( auto it = this->m_objects.begin( ); it != this->m_objects.end( ); )
@@ -559,7 +552,7 @@ namespace features::esp::player {
 		this->scene_object = 0;
 	}
 
-	void chams::backtrack::object::setup_bones( systems::bones::data* bones, int count ) const
+	void chams::backtrack::object::setup_bones( const systems::bones::data* bones, int count ) const
 	{
 		if ( !this->scene_object )
 		{

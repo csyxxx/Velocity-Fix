@@ -28,7 +28,7 @@ namespace features::esp {
 
 					void create (std::uintptr_t pawn);
 					void destroy ();
-					void setup_bones (systems::bones::data* bones, int count) const;
+					void setup_bones (const systems::bones::data* bones, int count) const;
 				};
 
 			private:

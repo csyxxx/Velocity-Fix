@@ -53,7 +53,8 @@ namespace features::combat {
 			struct visual_record
 			{
 				math::vector3 origin{};
-				std::array<systems::bones::data, 27> bones{};
+				std::array<systems::bones::data, 128> bones{};
+				int bone_count{};
 			};
 
 			struct extrapolation_data
@@ -76,7 +77,7 @@ namespace features::combat {
 
 			[[nodiscard]] record* get_oldest_valid( std::uintptr_t pawn );
 			[[nodiscard]] record* get_oldest_was_valid( std::uintptr_t pawn );
-			[[nodiscard]] std::optional<visual_record> get_oldest_was_valid_visual( std::uintptr_t pawn ) const;
+			[[nodiscard]] std::optional<visual_record> get_oldest_valid_visual( std::uintptr_t pawn ) const;
 			[[nodiscard]] std::vector<record*> get_valid_records( std::uintptr_t pawn );
 			[[nodiscard]] std::array<systems::bones::data, 27> get_skeleton( const record& record ) const;
 
@@ -210,10 +211,13 @@ namespace features::combat {
 			int current_tick{};
 			int ticks_since_land{};
 			float current_time{};
+			float tick_interval{};
+			int tickrate{};
 			float weapon_max_speed{};
 			float range{};
 			bool is_jump_scouting{};
 			bool is_scoped{};
+			bool tickrate_normal{};
 			bool valid{};
 
 			float inaccuracy{};
@@ -230,6 +234,7 @@ namespace features::combat {
 		void invalidate_if_needed( );
 
 		[[nodiscard]] context& ctx( ) { return this->m_ctx; }
+		[[nodiscard]] bool tickrate_normal( ) const noexcept { return this->m_ctx.tickrate_normal; }
 		[[nodiscard]] penetration& pen( ) { return this->m_pen; }
 		[[nodiscard]] lagcomp& lc( ) { return this->m_lc; }
 		[[nodiscard]] shoot_history& sh( ) { return this->m_sh; }
@@ -652,7 +657,7 @@ namespace features::combat {
 		[[nodiscard]] knife_info get_knife_info( const systems::local::snapshot& local ) const;
 		[[nodiscard]] std::vector<scan_hit> scan_knife( const math::vector3& eye, const aim_context& ctx, const knife_info& info, std::vector<candidate>& candidates, const systems::local::snapshot& local ) const;
 
-		void fire_gun( systems::input::usercmd* cmd, const target& tgt, bool was_forced, const math::vector3& shoot_eye, const systems::local::snapshot& local, bool subtick_attack );
+		void fire_gun( systems::input::usercmd* cmd, const target& tgt, bool was_forced, const math::vector3& shoot_eye, const math::vector3& command_aim_punch, const systems::local::snapshot& local, bool subtick_attack );
 		void fire_melee( systems::input::usercmd* cmd, const target& tgt, const systems::local::snapshot& local );
 
 		[[nodiscard]] std::vector<math::vector3> generate_multipoints( const systems::hitboxes::entry& hitbox, const math::vector3& center, const math::quaternion& bone_rot, float pointscale, const math::vector3& shoot_pos, float inaccuracy, const math::vector3& predicted_velocity = {}, int extrapolated_ticks = 0 ) const;

@@ -303,11 +303,41 @@ namespace systems {
 				memory::write<std::uint8_t>( old_slot + 140, 0 );
 			}
 
-			const auto next_tick = memory::read<int>( local.controller + SCHEMA( "CBasePlayerController", "m_nTickBase"_hash ) ) + 1;
-			const auto next_time = static_cast< float >( next_tick ) * 0.015625f;
+			const auto tick_interval = memory::read<float>( global_vars + 52 );
+			if ( !std::isfinite( tick_interval ) || tick_interval < 0.001f || tick_interval > 0.25f )
+			{
+				logging::console::print( xs( "[prediction] skipped: invalid tick interval" ) );
+				return false;
+			}
+			const auto controller_tick = memory::read<int>( local.controller + SCHEMA( "CBasePlayerController", "m_nTickBase"_hash ) );
+			const auto base_cmd = cmd->csgo_user_cmd.base( );
+			auto command_tick = 0;
+			for ( auto i = cmd->csgo_user_cmd.input_history_size( ) - 1; i >= 0; --i )
+			{
+				const auto entry = cmd->csgo_user_cmd.mutable_input_history( i );
+				if ( !entry )
+					continue;
+				if ( entry->has_player_tick_count( ) && entry->player_tick_count( ) > 0 )
+				{
+					command_tick = entry->player_tick_count( );
+					break;
+				}
+				if ( entry->has_render_tick_count( ) && entry->render_tick_count( ) > 0 )
+				{
+					command_tick = entry->render_tick_count( );
+					break;
+				}
+			}
+			if ( command_tick <= 0 && base_cmd && base_cmd->client_tick( ) > 0 )
+				command_tick = base_cmd->client_tick( );
+			// Prediction and fire-seed generation must use the same command tick.
+			// Falling back to tickbase+1 is kept for commands whose base section has
+			// not been populated yet.
+			const auto next_tick = command_tick > 0 ? command_tick : controller_tick + 1;
+			const auto next_time = static_cast< float >( next_tick ) * tick_interval;
 
 			memory::write<float>( global_vars + 48, next_time );
-			memory::write<float>( global_vars + 52, 0.015625f );
+			memory::write<float>( global_vars + 52, tick_interval );
 			memory::write<int>( global_vars + 68, next_tick );
 			memory::write<float>( global_vars + 80, 0.0f );
 			memory::write<std::uint32_t>( global_vars + 88, GetCurrentThreadId( ) );

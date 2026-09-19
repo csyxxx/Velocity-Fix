@@ -2,7 +2,7 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
-      <FullPath>D:\velocity-fixed\velocity-fixed-main\cs2\bin\velocity-cs2-dev.dll</FullPath>
+      <FullPath>D:\velocity-fixed\velocity-fixed-main\cs2\Velocity-Fix\bin\velocity-cs2-dev.dll</FullPath>
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

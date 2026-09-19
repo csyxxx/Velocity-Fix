@@ -884,15 +884,21 @@ namespace features::combat {
 #if defined( DEV )
 		const auto final_shot = entry->view_angles( );
 		const auto final_base = base->viewangles( );
+		const auto final_eye = entry->shoot_position( );
 		diag::writef(
 			diag::level::info,
-			"[rage_shot_final] cmd=%lld attack_history=%d history=%d/%d player_tick=%d+%.3f consumed_angles=%u shot=(%.3f,%.3f,%.3f) base=(%.3f,%.3f,%.3f)",
+			"[rage_shot_final] cmd=%lld attack_history=%d history=%d/%d player_tick=%d+%.3f render_tick=%d+%.3f shoot_eye=(%.2f,%.2f,%.2f) consumed_angles=%u shot=(%.3f,%.3f,%.3f) base=(%.3f,%.3f,%.3f)",
 			static_cast<long long>( cmd->command_number ),
 			cmd->csgo_user_cmd.attack1_start_history_index( ),
 			this->m_protected_shot_history_index,
 			history_size,
 			entry->player_tick_count( ),
 			entry->player_tick_fraction( ),
+			entry->render_tick_count( ),
+			entry->render_tick_fraction( ),
+			final_eye ? final_eye->x( ) : 0.0f,
+			final_eye ? final_eye->y( ) : 0.0f,
+			final_eye ? final_eye->z( ) : 0.0f,
 			consumed_server_angle_changes,
 			final_shot ? final_shot->x( ) : 0.0f,
 			final_shot ? final_shot->y( ) : 0.0f,
@@ -1185,7 +1191,7 @@ namespace features::combat {
 				return false;
 			}
 		}
-		this->fire_gun( cmd, target, was_forced, shoot_eye, local, false );
+		this->fire_gun( cmd, target, was_forced, shoot_eye, g_shared.get_aim_punch( local.pawn ), local, false );
 		this->m_doubletap_followup_fire = false;
 		if ( !this->m_firing_this_tick )
 		{
@@ -1343,7 +1349,9 @@ namespace features::combat {
 	{
 		// 收集有效敌方记录；普通 Rage 只使用当前网络姿态或完整外推姿态，不混用过期记录。
 		const auto& shared_ctx = g_shared.ctx( );
-		const auto extrapolation_enabled = settings::g_combat.m_lagcomp.extrapolation.value;
+		const auto backtrack_enabled = settings::g_combat.m_lagcomp.backtrack.value;
+		const auto extrapolation_enabled = settings::g_combat.m_lagcomp.extrapolation.value
+			&& !backtrack_enabled;
 		const auto players = systems::g_entities.get_by_type( systems::entities::type::player );
 		const auto local_origin = systems::g_prediction.pre( ).origin;
 		constexpr auto max_extrapolated_targets{ 3 };
@@ -1366,7 +1374,7 @@ namespace features::combat {
 			const_cast<rage*>( this )->m_live_records.reserve( players.size( ) );
 		}
 
-		if ( settings::g_combat.m_lagcomp.extrapolation.value )
+		if ( extrapolation_enabled )
 		{
 			std::vector<std::pair<float, std::uintptr_t>> priority;
 			priority.reserve( players.size( ) );
@@ -1719,6 +1727,7 @@ namespace features::combat {
 
 		auto& shared_ctx = g_shared.ctx( );
 		const auto& config = settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
+		const auto backtrack_enabled = settings::g_combat.m_lagcomp.backtrack.value;
 		const auto log_gate = [ & ]( const char* reason, std::size_t candidate_count = 0,
 			std::size_t hit_count = 0, bool best_valid = false )
 		{
@@ -1739,10 +1748,10 @@ namespace features::combat {
 				? memory::read<int>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash ) )
 				: -1;
 			diag::writef( diag::level::info,
-				"[rage_gate] reason=%s tick=%d tickbase=%d next_primary=%d allow_fire=%u candidates=%zu hits=%zu best=%u inaccuracy=%.6f spread=%.6f",
+				"[rage_gate] reason=%s tick=%d tickbase=%d next_primary=%d allow_fire=%u candidates=%zu hits=%zu best=%u inaccuracy=%.6f spread=%.6f tickrate=%d interval=%.6f",
 				reason, tick, tick_base, next_primary, allow_fire ? 1u : 0u,
 				candidate_count, hit_count, best_valid ? 1u : 0u,
-				shared_ctx.inaccuracy, shared_ctx.spread );
+				shared_ctx.inaccuracy, shared_ctx.spread, shared_ctx.tickrate, shared_ctx.tick_interval );
 #else
 			static_cast< void >( reason );
 			static_cast< void >( candidate_count );
@@ -1750,6 +1759,15 @@ namespace features::combat {
 			static_cast< void >( best_valid );
 #endif
 		};
+		if ( config.no_spread.value && !g_shared.tickrate_normal( ) )
+		{
+			// Seed reconstruction is tied to the 64 tick interval used by the
+			// command/history path.  Do not submit a shot while GlobalVars is
+			// stale, invalid, or reporting another tickrate.
+			this->m_firing_this_tick = false;
+			log_gate( "nospread_tickrate_invalid" );
+			return;
+		}
 		if ( config.no_spread.value && shared_ctx.item_def_idx == cstypes::item_definition_index::weapon_r8_revolver )
 		{
 			shared_ctx.weapon_mode = 1;
@@ -1767,6 +1785,55 @@ namespace features::combat {
 			// charging 状态保持攻击键抑制，避免普通单发消耗掉 DT 的 Ready 节奏。
 			return !dt_enabled || action == doubletap_action::command_pair;
 		};
+
+		// Keep both local states. No-spread uses the command state produced by
+		// prediction; other backtrack paths retain their pre-simulation behavior.
+		const auto latest_local_eye = g_shared.get_shoot_position( );
+		auto predicted_command_eye = latest_local_eye;
+		auto predicted_command_accuracy = shared::accuracy_sample{};
+		auto predicted_command_accuracy_valid = false;
+		auto predicted_command_aim_punch = g_shared.get_aim_punch( local.pawn );
+		const auto prediction_ok = systems::g_prediction.simulate( cmd, local, [ & ]
+		{
+			predicted_command_eye = g_shared.get_shoot_position( );
+			predicted_command_aim_punch = g_shared.get_aim_punch( local.pawn );
+			predicted_command_accuracy = g_shared.get_accuracy_sample( true );
+			predicted_command_accuracy_valid = std::isfinite( predicted_command_accuracy.inaccuracy )
+				&& std::isfinite( predicted_command_accuracy.spread );
+			if ( predicted_command_accuracy_valid )
+			{
+				shared_ctx.inaccuracy = predicted_command_accuracy.inaccuracy;
+				shared_ctx.spread = predicted_command_accuracy.spread;
+			}
+			shared_ctx.recoil_index = memory::read<float>(
+				shared_ctx.weapon + SCHEMA( "C_CSWeaponBase", "m_flRecoilIndex"_hash ) );
+		} );
+		const auto finite_latest_eye = std::isfinite( latest_local_eye.x )
+			&& std::isfinite( latest_local_eye.y )
+			&& std::isfinite( latest_local_eye.z )
+			&& latest_local_eye.length_sqr( ) >= 1.0f;
+		const auto finite_predicted_eye = std::isfinite( predicted_command_eye.x )
+			&& std::isfinite( predicted_command_eye.y )
+			&& std::isfinite( predicted_command_eye.z )
+			&& predicted_command_eye.length_sqr( ) >= 1.0f;
+		const auto predicted_command_aim_punch_valid = std::isfinite( predicted_command_aim_punch.x )
+			&& std::isfinite( predicted_command_aim_punch.y )
+			&& std::isfinite( predicted_command_aim_punch.z );
+		const auto firing_eye_valid = config.no_spread.value
+			? finite_predicted_eye
+			: ( backtrack_enabled ? finite_latest_eye : finite_predicted_eye );
+		if ( config.no_spread.value &&
+			( !prediction_ok || !firing_eye_valid || !predicted_command_accuracy_valid ||
+				!predicted_command_aim_punch_valid ) )
+		{
+			log_gate( "prediction_unavailable" );
+			this->m_firing_this_tick = false;
+			return;
+		}
+		if ( !finite_predicted_eye )
+		{
+			predicted_command_eye = g_shared.get_shoot_position( );
+		}
 
 		auto candidates = this->gather_candidates( local );
 
@@ -1794,44 +1861,29 @@ namespace features::combat {
 		// 使用 build_context 在预测前捕获的当前命令射击原点。
 		// 这里不能重新读取场景节点眼位，否则下一 tick 的临时预测状态
 		// 会被误当成当前开火位置，导致扫描和真实弹道起点错位。
-		const auto current_command_eye = g_shared.get_shoot_position( );
-		if ( finite_eye( current_command_eye ) )
+		const auto current_command_eye = config.no_spread.value
+			? predicted_command_eye
+			: ( backtrack_enabled ? latest_local_eye : predicted_command_eye );
+		// Rewind only the target; no-spread keeps the local ray on the predicted
+		// command state that the server will process.
+		if ( !finite_eye( current_command_eye ) )
 		{
-			eye_candidates.entries[ 0 ].position = current_command_eye;
-			eye_candidates.entries[ 0 ].is_uninterpolated = true;
-			eye_candidates.entries[ 0 ].player_tick = g_shared.sh( ).client_tick( );
-			eye_candidates.entries[ 0 ].player_frac = 0.0f;
-			eye_candidates.entries[ 0 ].lerp_ticks_int = 0;
-			eye_candidates.entries[ 0 ].lerp_ticks_frac = 0.0f;
-			eye_candidates.count = 1;
+			log_gate( "current_eye_invalid", candidates.size( ) );
+			finish_doubletap( false );
+			return;
 		}
-		if ( eye_candidates.count == 0 )
-		{
-			eye_candidates.entries[ 0 ].position = g_shared.get_shoot_position( );
-			eye_candidates.entries[ 0 ].is_uninterpolated = true;
-			eye_candidates.count = 1;
-		}
-		if ( config.no_spread.value && eye_candidates.count > 1 )
-		{
-			eye_candidates.count = 1;
-		}
-		if ( config.no_spread.value )
-		{
-			if ( finite_eye( current_command_eye ) )
-			{
-				eye_candidates.entries[ 0 ].position = current_command_eye;
-				eye_candidates.entries[ 0 ].is_uninterpolated = true;
-				eye_candidates.entries[ 0 ].player_frac = 0.0f;
-				eye_candidates.entries[ 0 ].lerp_ticks_int = 0;
-				eye_candidates.entries[ 0 ].lerp_ticks_frac = 0.0f;
-				eye_candidates.count = 1;
-			}
-		}
+		eye_candidates.entries[ 0 ].position = current_command_eye;
+		eye_candidates.entries[ 0 ].is_uninterpolated = true;
+		eye_candidates.entries[ 0 ].player_tick = g_shared.sh( ).client_tick( );
+		eye_candidates.entries[ 0 ].player_frac = g_shared.sh( ).client_tick_frac( );
+		eye_candidates.entries[ 0 ].lerp_ticks_int = 0;
+		eye_candidates.entries[ 0 ].lerp_ticks_frac = 0.0f;
+		eye_candidates.count = 1;
 
 		// early 模式先模拟当前反向制动后的停点，再用停点眼位和停点
 		// 精度扫描。没有命中时仍回退到实时眼位，避免提前量导致漏目标。
 		std::optional<stop_prediction> early_stop{};
-		if ( config.autostop.values[ 0 ] && ctx.on_ground && !config.no_spread.value )
+		if ( config.autostop.values[ 0 ] && ctx.on_ground && !config.no_spread.value && !backtrack_enabled )
 		{
 			early_stop = this->predict_stop( ctx, eye_candidates.entries[ 0 ].position, local );
 		}
@@ -1839,7 +1891,7 @@ namespace features::combat {
 		const auto scan_from_eye_candidates = [ & ]( const math::vector3& eye_offset, float inaccuracy )
 		{
 			std::vector<scan_hit> hits_out;
-			const auto record_limit = config.no_spread.value ? 1 : 3;
+			const auto record_limit = config.no_spread.value && !backtrack_enabled ? 1 : 3;
 			const auto scan_pass = [ & ]( bool use_stop_eye )
 			{
 				for ( auto i = 0; i < eye_candidates.count; ++i )
@@ -1944,7 +1996,9 @@ namespace features::combat {
 			this->m_air_stop_requested = false;
 			this->m_air_stop_settle_ticks = 0;
 
-			shared_ctx.inaccuracy = g_shared.get_inaccuracy( false );
+			// Keep the exact command state captured before prediction was restored.
+			shared_ctx.inaccuracy = predicted_command_accuracy.inaccuracy;
+			shared_ctx.spread = predicted_command_accuracy.spread;
 			if ( !std::isfinite( shared_ctx.inaccuracy ) || !std::isfinite( shared_ctx.spread ) )
 			{
 				log_gate( "invalid_accuracy", candidates.size( ) );
@@ -1962,7 +2016,7 @@ namespace features::combat {
 					candidates,
 					local,
 					0,
-					config.no_spread.value ? 1 : k_max_scan_records );
+					config.no_spread.value && !backtrack_enabled ? 1 : k_max_scan_records );
 				for ( auto& hit : hits )
 				{
 					hit.source_eye = eye_candidates.entries[ i ];
@@ -1994,7 +2048,7 @@ namespace features::combat {
 				return;
 			}
 
-			this->fire_gun( cmd, legacy_best, false, legacy_best.hit.source_eye.position, local, false );
+			this->fire_gun( cmd, legacy_best, false, legacy_best.hit.source_eye.position, predicted_command_aim_punch, local, false );
 			if ( !this->m_firing_this_tick )
 			{
 				cmd->buttons.value &= ~cstypes::command_buttons::in_attack;
@@ -2007,7 +2061,8 @@ namespace features::combat {
 
 		const auto primary_eye = eye_candidates.entries[ 0 ].position;
 		const auto& prestate = systems::g_prediction.pre( );
-		const auto duckpeek_enabled = settings::g_combat.m_duckpeek.enabled.value && ctx.on_ground;
+		const auto duckpeek_enabled = settings::g_combat.m_duckpeek.enabled.value && ctx.on_ground
+			&& !backtrack_enabled;
 
 		auto current_hits = scan_from_eye_candidates( {}, ctx.predicted_inaccuracy );
 		std::vector<scan_hit> rise_hits;
@@ -2152,7 +2207,7 @@ namespace features::combat {
 			}
 			this->m_double_tap.update_aim( best.hit.aim_angle - g_shared.get_aim_punch( local.pawn ), shared_ctx.current_tick );
 			const auto was_forced = !accurate && force;
-			this->fire_gun( cmd, best, was_forced, best.hit.source_eye.position, local, false );
+			this->fire_gun( cmd, best, was_forced, best.hit.source_eye.position, predicted_command_aim_punch, local, false );
 			if ( !this->m_firing_this_tick )
 			{
 				log_gate( "fire_rejected", candidates.size( ), current_hits.size( ), best.valid );
@@ -3668,7 +3723,7 @@ namespace features::combat {
 		return results;
 	}
 
-	void rage::fire_gun( systems::input::usercmd* cmd, const target& tgt, bool was_forced, const math::vector3& requested_shoot_eye, const systems::local::snapshot& local, bool subtick_attack )
+	void rage::fire_gun( systems::input::usercmd* cmd, const target& tgt, bool was_forced, const math::vector3& requested_shoot_eye, const math::vector3& command_aim_punch, const systems::local::snapshot& local, bool subtick_attack )
 	{
 		// 开火阶段固定本地眼位、目标记录、穿透结果和输入历史，确保提交给服务器的是同一条射线。
 		const auto cached_pair_record = this->m_doubletap_followup_fire
@@ -3726,6 +3781,9 @@ namespace features::combat {
 		const auto command_tick = base ? base->client_tick( ) : tick_base;
 		auto& shared_ctx = g_shared.ctx( );
 		const auto& config = settings::g_combat.m_ragebot.get_group( shared_ctx.weapon_type );
+		const auto fire_tick_interval = std::isfinite( shared_ctx.tick_interval ) && shared_ctx.tick_interval > 0.0001f
+			? shared_ctx.tick_interval
+			: cstypes::tick_interval;
 		// NS 也沿用扫描阶段的同一眼位，保证种子、穿透和最终命令一致。
 		// NS 不使用本地预测时，攻击命令中的移动会在服务端先推进
 		// 一 tick，再计算射击原点。清除该命令的移动分量，确保射击
@@ -3761,7 +3819,7 @@ namespace features::combat {
 			selected_record->valid && !selected_record->extrapolated && selected_record->tick > 0 &&
 			command_reference_tick > selected_record->tick;
 		const auto selected_record_time = selected_record_is_backtrack
-			? cstypes::tick_fraction::from_value( selected_record->simulation_time / cstypes::tick_interval )
+			? cstypes::tick_fraction::from_value( selected_record->simulation_time / fire_tick_interval )
 			: cstypes::tick_fraction{};
 		std::optional<shared::lagcomp::record> fire_prediction{};
 
@@ -3780,7 +3838,9 @@ namespace features::combat {
 			verify_hitboxes = scene_node ? systems::g_hitboxes.query( scene_node ) : systems::hitboxes::set{};
 			verify_hitboxes_ptr = verify_hitboxes.count > 0 ? &verify_hitboxes : nullptr;
 		};
-		const auto aim_punch = g_shared.get_aim_punch( local.pawn );
+		const auto aim_punch = config.no_spread.value
+			? command_aim_punch
+			: g_shared.get_aim_punch( local.pawn );
 		auto aim_position = tgt.hit.position;
 
 		if ( extrapolation_enabled && !selected_record_is_backtrack && !tgt.hit.record->extrapolated &&
@@ -4018,7 +4078,7 @@ namespace features::combat {
 
 		auto aim_angle = math::helpers::calculate_angle( shoot_eye, aim_position );
 		auto punched_aim = math::vector3{ aim_angle.x - aim_punch.x, aim_angle.y - aim_punch.y, 0.0f };
-		auto seed_base_angle = aim_angle;
+		auto seed_base_angle = punched_aim;
 		auto submitted_angle = punched_aim;
 		auto fire_angle = aim_angle;
 		auto trajectory_angle = submitted_angle;
@@ -4123,24 +4183,48 @@ namespace features::combat {
 					tgt.hit.hitbox.radius - 0.30f,
 					fraction );
 			};
-		auto spread_seed_tick = config.no_spread.value
-			? tick_base
-			: ( command_tick > 0 ? command_tick : tick_base );
-		auto spread_seed_fraction = 0.0f;
-		if ( backtrack_enabled && !tgt.hit.source_eye.is_uninterpolated )
+		const auto resolve_nospread_time = [ & ]( )
 		{
-			const auto tick_add = [ ]( int tick, float fraction, int delta_tick, float delta_fraction )
+			auto resolved_tick = 0;
+			auto resolved_fraction = 0.0f;
+			// Match the engine contract used by the reference implementation:
+			// prefer the command history tick that will carry the attack, then the
+			// base command tick, and finally the local/global fallbacks.
+			for ( auto i = 0; i < cmd->csgo_user_cmd.input_history_size( ); ++i )
 			{
-				fraction += delta_fraction;
-				const auto carry = static_cast< int >( std::floor( fraction ) );
-				return std::pair{ tick + delta_tick + carry, fraction - static_cast< float >( carry ) };
-			};
-			std::tie( spread_seed_tick, spread_seed_fraction ) = tick_add(
-				tgt.hit.source_eye.player_tick,
-				tgt.hit.source_eye.player_frac,
-				tgt.hit.source_eye.lerp_ticks_int,
-				tgt.hit.source_eye.lerp_ticks_frac );
-		}
+				const auto entry = cmd->csgo_user_cmd.mutable_input_history( i );
+				if ( !entry )
+					continue;
+				if ( entry->has_player_tick_count( ) && entry->player_tick_count( ) > 0 )
+				{
+					resolved_tick = entry->player_tick_count( );
+					resolved_fraction = entry->has_player_tick_fraction( )
+						? std::clamp( entry->player_tick_fraction( ), 0.0f, 0.999999f )
+						: 0.0f;
+					break;
+				}
+				if ( entry->has_render_tick_count( ) && entry->render_tick_count( ) > 0 )
+				{
+					resolved_tick = entry->render_tick_count( );
+					resolved_fraction = entry->has_render_tick_fraction( )
+						? std::clamp( entry->render_tick_fraction( ), 0.0f, 0.999999f )
+						: 0.0f;
+					break;
+				}
+			}
+			if ( resolved_tick <= 0 )
+				resolved_tick = command_tick;
+			if ( resolved_tick <= 0 )
+				resolved_tick = tick_base;
+			if ( resolved_tick <= 0 )
+				resolved_tick = shared_ctx.current_tick;
+			return std::pair{ resolved_tick, resolved_fraction };
+		};
+		const auto nospread_time = resolve_nospread_time( );
+		auto spread_seed_tick = config.no_spread.value
+			? nospread_time.first
+			: ( command_tick > 0 ? command_tick : tick_base );
+		auto spread_seed_fraction = config.no_spread.value ? nospread_time.second : 0.0f;
 		if ( config.doubletap.value && !config.no_spread.value )
 		{
 			const auto dt_claim = this->m_double_tap.claimed_tick( );
@@ -4167,13 +4251,6 @@ namespace features::combat {
 		{
 			const auto scanned_inaccuracy = shared_ctx.inaccuracy;
 			const auto scanned_spread = shared_ctx.spread;
-			const auto fire_accuracy = g_shared.get_accuracy_sample( true );
-			if ( std::isfinite( fire_accuracy.inaccuracy ) && std::isfinite( fire_accuracy.spread ) )
-			{
-				shared_ctx.inaccuracy = fire_accuracy.inaccuracy;
-				shared_ctx.spread = fire_accuracy.spread;
-			}
-			shared_ctx.recoil_index = memory::read<float>( shared_ctx.weapon + SCHEMA( "C_CSWeaponBase", "m_flRecoilIndex"_hash ) );
 
 			if ( !std::isfinite( shared_ctx.inaccuracy ) || !std::isfinite( shared_ctx.spread ) ||
 				!std::isfinite( shared_ctx.recoil_index ) )
@@ -4189,20 +4266,44 @@ namespace features::combat {
 				tick_base,
 				scanned_inaccuracy,
 				scanned_spread,
-				shared_ctx.inaccuracy,
-				shared_ctx.spread,
+				scanned_inaccuracy,
+				scanned_spread,
 				shared_ctx.recoil_index,
-				shared_ctx.inaccuracy - scanned_inaccuracy,
-				shared_ctx.spread - scanned_spread );
+				0.0f,
+				0.0f );
 #endif
 
 			const auto claim_tick = spread_seed_tick;
 
 			history_seed_tick = claim_tick;
-			history_seed_fraction = ( config.doubletap.value && !config.no_spread.value && claim_tick != spread_seed_tick )
-				? std::clamp( this->m_double_tap.next_attack_fraction( ), 0.0f, 0.999999f )
-				: 0.0f;
+			history_seed_fraction = spread_seed_fraction;
 
+			// Recheck readiness against the exact timestamp that will be serialized
+			// into the attack history. Earlier gates run before this timestamp is
+			// finalized and therefore are insufficient for a deterministic shot.
+			const auto revolver_secondary = shared_ctx.item_def_idx == cstypes::item_definition_index::weapon_r8_revolver;
+			const auto next_attack_tick = revolver_secondary
+				? memory::read<int>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextSecondaryAttackTick"_hash ) )
+				: memory::read<int>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash ) );
+			auto next_attack_fraction = revolver_secondary
+				? memory::read<float>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_flNextSecondaryAttackTickRatio"_hash ) )
+				: memory::read<float>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_flNextPrimaryAttackTickRatio"_hash ) );
+			if ( !std::isfinite( next_attack_fraction ) )
+			{
+				this->m_firing_this_tick = false;
+				return;
+			}
+			next_attack_fraction = std::clamp( next_attack_fraction, 0.0f, 0.999999f );
+			if ( claim_tick < next_attack_tick ||
+				( claim_tick == next_attack_tick && history_seed_fraction + 0.000001f < next_attack_fraction ) )
+			{
+				this->m_firing_this_tick = false;
+				return;
+			}
+
+			// The server applies aim punch before hashing the firing angle for the
+			// spread seed. Solve the fixed point in that final firing-angle domain,
+			// then subtract punch only when serializing the command angle.
 			auto selected_seed = g_shared.get_spread_seed( fire_angle, claim_tick );
 			if ( selected_seed == 0 )
 			{
@@ -4216,26 +4317,13 @@ namespace features::combat {
 				shared_ctx.recoil_index,
 				shared_ctx.item_def_idx,
 				shared_ctx.num_bullets );
-			// Direct pitch+yaw spread fix. The engine spread offsets are tangent
-			// components in the shot basis, so solve them in angle space instead
-			// of searching pitch buckets.
 			auto corrected = fire_angle;
-			const auto pitch_cos = std::cosf( math::helpers::deg_to_rad( fire_angle.x ) );
-			if ( !std::isfinite( pitch_cos ) || std::fabsf( pitch_cos ) < 0.001f )
-			{
-				this->m_firing_this_tick = false;
-				return;
-			}
-			corrected.x = fire_angle.x - math::helpers::rad_to_deg( std::atan( selected_spread.y ) );
-			corrected.y = fire_angle.y - math::helpers::rad_to_deg( std::atan( selected_spread.x ) ) / pitch_cos;
-			corrected.z = 0.0f;
+			corrected.x += math::helpers::rad_to_deg(
+				std::atan( std::sqrt( selected_spread.x * selected_spread.x + selected_spread.y * selected_spread.y ) ) );
+			corrected.z = -math::helpers::rad_to_deg( std::atan2( selected_spread.x, selected_spread.y ) );
 			if ( g_shared.get_spread_seed( corrected, claim_tick ) != selected_seed )
 			{
-				// A corrected command that crosses a seed bucket would use a
-				// different server spread. Drop this shot rather than running a
-				// slow secondary search or firing with a stale correction.
-				this->m_firing_this_tick = false;
-				return;
+				corrected = g_shared.find_spread_correction( fire_angle, claim_tick, config.nospread_quality.value );
 			}
 
 			if ( !std::isfinite( corrected.x ) || !std::isfinite( corrected.y ) ||
@@ -4246,19 +4334,48 @@ namespace features::combat {
 				this->m_firing_this_tick = false;
 				return;
 			}
-			punched_aim = math::vector3{ corrected.x - aim_punch.x, corrected.y - aim_punch.y, 0.0f };
-			submitted_angle = math::vector3{ punched_aim.x, punched_aim.y, corrected.z };
-			trajectory_angle = fire_angle = corrected;
-			aim_angle = corrected;
-
-			// Keep the original seed/spread pair for trajectory generation; the
-			// corrected angle was already checked against this seed bucket.
-			const auto verified_seed = selected_seed;
-			const auto nospread_spread = selected_spread;
+			trajectory_angle = corrected;
+			fire_angle = corrected;
+			punched_aim = math::vector3{
+				corrected.x - aim_punch.x,
+				corrected.y - aim_punch.y,
+				0.0f };
+			submitted_angle = math::vector3{
+				punched_aim.x,
+				punched_aim.y,
+				corrected.z };
+			const auto verified_seed = g_shared.get_spread_seed( trajectory_angle, claim_tick );
+			if ( verified_seed == 0 )
+			{
+				this->m_firing_this_tick = false;
+				return;
+			}
+			const auto nospread_spread = g_shared.calculate_spread(
+				static_cast< int >( verified_seed ),
+				shared_ctx.inaccuracy,
+				shared_ctx.spread,
+				shared_ctx.recoil_index,
+				shared_ctx.item_def_idx,
+				shared_ctx.num_bullets );
 			math::vector3 nospread_forward{}, nospread_left{}, nospread_up{};
-			math::helpers::angle_vectors_left( fire_angle, &nospread_forward, &nospread_left, &nospread_up );
+			math::helpers::angle_vectors_left( trajectory_angle, &nospread_forward, &nospread_left, &nospread_up );
 			const auto bullet_delta = ( nospread_forward + nospread_left * nospread_spread.x + nospread_up * nospread_spread.y ).normalized( ) * shared_ctx.range;
 			trajectory_direction = bullet_delta.normalized( );
+
+#if defined( DEV )
+			diag::writef(
+				diag::level::info,
+				"[nospread_contract] claim=%d+%.3f seed_base=(%.3f,%.3f,%.3f) punch=(%.3f,%.3f,%.3f) submitted=(%.3f,%.3f,%.3f) trajectory=(%.3f,%.3f,%.3f) seed=%u spread=(%.6f,%.6f) bullet=(%.5f,%.5f,%.5f)",
+				claim_tick,
+				history_seed_fraction,
+				seed_base_angle.x, seed_base_angle.y, seed_base_angle.z,
+				aim_punch.x, aim_punch.y, aim_punch.z,
+				submitted_angle.x, submitted_angle.y, submitted_angle.z,
+				trajectory_angle.x, trajectory_angle.y, trajectory_angle.z,
+				verified_seed,
+				nospread_spread.x, nospread_spread.y,
+				trajectory_direction.x, trajectory_direction.y, trajectory_direction.z );
+#endif
 
 #if 0
 			auto selected_seed = g_shared.get_spread_seed( seed_base_angle, claim_tick );
@@ -4666,7 +4783,7 @@ namespace features::combat {
 		}
 		features::misc::g_impacts.on_boom( tgt.hit.pawn, committed_hitgroup, committed_damage, tgt.hitchance, shared_ctx.inaccuracy, shared_ctx.spread, submitted_angle, trajectory_direction, shoot_eye, fire_record->tick, g_shared.lc( ).get_skeleton( *fire_record ), committed_hitbox, aim_position, fire_record->origin, shot_target_velocity, fire_record->extrapolated, committed_penetrated, was_forced, config.no_spread.value, shared_ctx.weapon );
 		features::esp::player::g_chams.os ().push (tgt.hit.pawn);
-		const auto record_time = cstypes::tick_fraction::from_value( fire_record->simulation_time / cstypes::tick_interval );
+		const auto record_time = cstypes::tick_fraction::from_value( fire_record->simulation_time / fire_tick_interval );
 		const auto backtrack_timestamped = selected_record_is_backtrack;
 		auto history_render_time = backtrack_timestamped ? selected_record_time : record_time;
 		if ( !backtrack_timestamped )
@@ -4677,14 +4794,10 @@ namespace features::combat {
 			history_render_time.tick = std::max( ( command_tick > 0 ? command_tick : tick_base ) - 1, 0 );
 			history_render_time.frac = 0.0f;
 		}
-			const auto history_player_tick = backtrack_timestamped && !config.no_spread.value
-				? selected_record_time.tick
-				: ( config.no_spread.value
-					? std::max( command_tick > 0 ? command_tick : tick_base, 1 )
-					: spread_seed_tick );
-		const auto history_player_fraction = backtrack_timestamped && !config.no_spread.value
-			? selected_record_time.frac
-			: ( config.no_spread.value ? history_seed_fraction : spread_seed_fraction );
+		// Player time identifies the current local firing command. Render time is
+		// independently rewound to the selected enemy record below.
+		const auto history_player_tick = std::max( history_seed_tick, 1 );
+		const auto history_player_fraction = history_seed_fraction;
 
 #if defined( DEV )
 		math::vector3 view_punch{};
@@ -4697,19 +4810,12 @@ namespace features::combat {
 			view_punch_ratio = memory::read<float>( camera_services + SCHEMA( "CPlayer_CameraServices", "m_flCsViewPunchAngleTickRatio"_hash ) );
 		}
 		const auto next_primary_tick = memory::read<int>( shared_ctx.weapon + SCHEMA( "C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash ) );
-		auto diagnostic_stamp_tick = tick_base;
-		if ( backtrack_enabled && !tgt.hit.source_eye.is_uninterpolated )
-		{
-			const auto fraction = tgt.hit.source_eye.player_frac + tgt.hit.source_eye.lerp_ticks_frac;
-			diagnostic_stamp_tick = tgt.hit.source_eye.player_tick
-				+ tgt.hit.source_eye.lerp_ticks_int
-				+ static_cast< int >( std::floor( fraction ) );
-		}
+		auto diagnostic_stamp_tick = history_player_tick;
 		const auto diagnostic_claim_tick = config.no_spread.value
-			? this->m_double_tap.no_spread_claim_tick( )
+			? history_seed_tick
 			: diagnostic_stamp_tick;
 		const auto diagnostic_seed = config.no_spread.value
-			? g_shared.get_spread_seed( submitted_angle, diagnostic_claim_tick )
+			? g_shared.get_spread_seed( trajectory_angle, diagnostic_claim_tick )
 			: 0u;
 		diag::writef(
 			diag::level::info,
@@ -4791,19 +4897,34 @@ namespace features::combat {
 				angles->set_z( submitted_angle.z );
 			}
 
-			// For a live, uninterpolated shot the input system already populated the
-			// current history timestamps. Overwriting them with command_tick moves the
-			// server reconstruction one tick ahead and desynchronizes the eye/ray.
-			if ( backtrack_timestamped )
+			// Player time remains on the current command. No-spread keeps all angle
+			// history entries in that seed domain; target rewind belongs only to the
+			// actual attack entry's render timestamp.
+			if ( config.no_spread.value || backtrack_timestamped )
 			{
-				entry->set_render_tick_count( history_render_time.tick + 1 );
-				entry->set_render_tick_fraction( history_render_time.frac );
 				entry->set_player_tick_count( history_player_tick );
 				entry->set_player_tick_fraction( history_player_fraction );
 			}
 			if ( i == shot_history_index )
 			{
-				static_cast< void >( systems::g_input.set_shoot_position( cmd, entry, shoot_eye ) );
+				entry->set_render_tick_count( history_render_time.tick + 1 );
+				entry->set_render_tick_fraction( history_render_time.frac );
+			}
+			if ( i == shot_history_index )
+			{
+				const auto shoot_position_written = systems::g_input.set_shoot_position( cmd, entry, shoot_eye );
+#if defined( DEV )
+				diag::writef(
+					diag::level::info,
+					"[rage_history_commit] index=%d player=%d+%.3f render=%d+%.3f backtrack=%u shoot_position=%u",
+					i,
+					entry->player_tick_count( ), entry->player_tick_fraction( ),
+					entry->render_tick_count( ), entry->render_tick_fraction( ),
+					backtrack_timestamped ? 1u : 0u,
+					shoot_position_written ? 1u : 0u );
+#else
+				static_cast< void >( shoot_position_written );
+#endif
 			}
 
 			if ( entry->has_sv_interp0( ) )
@@ -4862,18 +4983,26 @@ namespace features::combat {
 #if defined( DEV )
 		if ( backtrack_timestamped )
 		{
+			const auto stamped_entry = shot_history_index >= 0
+				? cmd->csgo_user_cmd.mutable_input_history( shot_history_index )
+				: nullptr;
+			const auto stamped_eye = stamped_entry ? stamped_entry->shoot_position( ) : nullptr;
 			diag::writef(
 				diag::level::info,
-				"[rage_backtrack_stamp] selected=%d+%.3f command=%d attack_history=%d nospread=%u player_seed=%d+%.3f render=%d+%.3f",
+				"[rage_backtrack_stamp] selected=%d+%.3f command=%d age=%d attack_history=%d nospread=%u player=%d+%.3f render=%d+%.3f shoot=(%.2f,%.2f,%.2f)",
 				selected_record_time.tick,
 				selected_record_time.frac,
 				command_reference_tick,
+				std::max( command_reference_tick - selected_record_time.tick, 0 ),
 				shot_history_index,
 				config.no_spread.value ? 1u : 0u,
-				config.no_spread.value ? history_seed_tick : spread_seed_tick,
-				config.no_spread.value ? history_seed_fraction : spread_seed_fraction,
-				history_render_time.tick,
-				history_render_time.frac );
+				stamped_entry ? stamped_entry->player_tick_count( ) : -1,
+				stamped_entry ? stamped_entry->player_tick_fraction( ) : 0.0f,
+				stamped_entry ? stamped_entry->render_tick_count( ) : -1,
+				stamped_entry ? stamped_entry->render_tick_fraction( ) : 0.0f,
+				stamped_eye ? stamped_eye->x( ) : 0.0f,
+				stamped_eye ? stamped_eye->y( ) : 0.0f,
+				stamped_eye ? stamped_eye->z( ) : 0.0f );
 		}
 #endif
 

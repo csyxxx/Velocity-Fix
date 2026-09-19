@@ -763,19 +763,8 @@ namespace hooks {
 			antiaim.finalize_movement(
 				current_cmd,
 				movement_is_command_relative );
-			// NS shots must keep the exact movement snapshot used for the scan.  The
-			// final movement pass can restore subtick analog input after rage has
-			// committed the shot, which makes the server advance the local origin
-			// before evaluating the attack history entry.
-			if ( features::combat::g_rage.is_firing_this_tick( ) )
-			{
-				const auto& shot_ctx = features::combat::g_shared.ctx( );
-				const auto& shot_config = settings::g_combat.m_ragebot.get_group( shot_ctx.weapon_type );
-				if ( shot_config.no_spread.value )
-				{
-					clear_horizontal_movement( current_cmd );
-				}
-			}
+			// Keep the movement serialized by the command that rage predicted.
+			// Clearing it after fire_gun() changes the server-side firing origin.
 			if ( trace )
 			{
 				diag::step( "create_move: quickpeek end" );

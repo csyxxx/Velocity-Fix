@@ -278,7 +278,7 @@ namespace features::esp::player {
 
 		if ( cfg.type == settings::esp::player::overlay::skeleton::mode::backtrack && local.is_alive )
 		{
-			const auto record = combat::g_shared.lc( ).get_oldest_was_valid_visual( info.pawn );
+			const auto record = combat::g_shared.lc( ).get_oldest_valid_visual( info.pawn );
 			if ( record )
 			{
 				if ( record->origin.distance( info.origin ) >= 0.25f )

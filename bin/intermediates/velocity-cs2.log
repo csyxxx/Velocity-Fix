@@ -1,9 +1,17 @@
 ﻿project\core\features\combat\impl\rage.cpp(657,5): warning : ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
 project\core\features\combat\impl\rage.cpp(666,5): warning : ignoring return value of function declared with 'nodiscard' attribute [-Wunused-result]
-project\core\features\combat\impl\rage.cpp(2008,14): warning : unused variable 'primary_eye' [-Wunused-variable]
-project\core\features\combat\impl\rage.cpp(4256,15): warning : unused variable 'verified_seed' [-Wunused-variable]
-project\core\features\combat\impl\rage.cpp(4383,15): warning : unused variable 'local_velocity' [-Wunused-variable]
-project\core\features\combat\impl\rage.cpp(4021,8): warning : unused variable 'seed_base_angle' [-Wunused-variable]
-  velocity-cs2.vcxproj -> D:\velocity-fixed\velocity-fixed-main\cs2\bin\velocity-cs2-dev.dll
-  'pwsh.exe' 不是内部或外部命令，也不是可运行的程序
-  或批处理文件。
+project\core\features\combat\impl\rage.cpp(2017,14): warning : unused variable 'primary_eye' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4285,15): warning : unused variable 'verified_seed' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4412,15): warning : unused variable 'local_velocity' [-Wunused-variable]
+project\core\features\combat\impl\rage.cpp(4030,8): warning : unused variable 'seed_base_angle' [-Wunused-variable]
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003: 指定的任务可执行文件“lld-link.exe”未能运行。System.IO.IOException: 文件“D:\velocity-fixed\velocity-fixed-main\cs2\Velocity-Fix\bin\intermediates\velocity-cs2.tlog\lld-link.read.1.tlog”正由另一进程使用，因此该进程无法访问此文件。
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.__Error.WinIOError(Int32 errorCode, String maybeFullPath)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.FileStream.Init(String path, FileMode mode, FileAccess access, Int32 rights, Boolean useRights, FileShare share, Int32 bufferSize, FileOptions options, SECURITY_ATTRIBUTES secAttrs, String msgPath, Boolean bFromProxy, Boolean useLongPath, Boolean checkHost)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.FileStream..ctor(String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, FileOptions options, String msgPath, Boolean bFromProxy, Boolean useLongPath, Boolean checkHost)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.StreamWriter.CreateFile(String path, Boolean append, Boolean checkHost)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.StreamWriter..ctor(String path, Boolean append, Encoding encoding, Int32 bufferSize, Boolean checkHost)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 System.IO.File.InternalWriteAllText(String path, String contents, Encoding encoding, Boolean checkHost)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 Microsoft.Build.Utilities.CanonicalTrackedInputFiles.SaveTlog(DependencyFilter includeInTLog)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 Microsoft.Build.CPPTasks.TrackedVCToolTask.PostExecuteTool(Int32 exitCode)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 Microsoft.Build.CPPTasks.TrackedVCToolTask.ExecuteTool(String pathToTool, String responseFileCommands, String commandLineCommands)
+D:\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.Cpp.ClangCl.Common.targets(404,5): error MSB6003:    在 Microsoft.Build.Utilities.ToolTask.Execute()
