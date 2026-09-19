@@ -12,6 +12,7 @@
 #include <protection/game_addresses.hpp>
 
 #include <fstream>
+#include <cstring>
 #include <mutex>
 
 namespace scripting {
@@ -421,7 +422,7 @@ namespace scripting {
 			return error.what( );
 		}
 
-		enum class api_setting_kind : std::uint8_t { boolean, integer, decimal, color, string };
+		enum class api_setting_kind : std::uint8_t { boolean, integer, enumeration, decimal, color, string };
 
 		struct api_setting
 		{
@@ -429,7 +430,21 @@ namespace scripting {
 			api_setting_kind kind{};
 			void* value{};
 			xui::setting* module{};
+			int maximum{ -1 };
 		};
+
+		[[nodiscard]] int enum_value( const void* value )
+		{
+			std::uint8_t raw{};
+			std::memcpy( &raw, value, sizeof( raw ) );
+			return static_cast<int>( raw );
+		}
+
+		void set_enum_value( void* value, const int requested, const int maximum )
+		{
+			const auto raw = static_cast<std::uint8_t>( std::clamp( requested, 0, maximum >= 0 ? maximum : 255 ) );
+			std::memcpy( value, &raw, sizeof( raw ) );
+		}
 
 		[[nodiscard]] const char* api_setting_type_name( const api_setting_kind kind )
 		{
@@ -437,6 +452,7 @@ namespace scripting {
 			{
 			case api_setting_kind::boolean: return "boolean";
 			case api_setting_kind::integer: return "integer";
+			case api_setting_kind::enumeration: return "integer";
 			case api_setting_kind::decimal: return "number";
 			case api_setting_kind::color: return "color";
 			case api_setting_kind::string: return "string";
@@ -455,6 +471,8 @@ namespace scripting {
 					{ out.push_back( { name, api_setting_kind::boolean, &value.value, &value } ); };
 				const auto add_int = [ &out ]( const std::string& name, config::val<int>& value )
 					{ out.push_back( { name, api_setting_kind::integer, &value.value, nullptr } ); };
+				const auto add_enum = [ &out ]( const std::string& name, auto& value, const int maximum )
+					{ out.push_back( { name, api_setting_kind::enumeration, &value.value, nullptr, maximum } ); };
 				const auto add_float = [ &out ]( const std::string& name, config::val<float>& value )
 					{ out.push_back( { name, api_setting_kind::decimal, &value.value, nullptr } ); };
 				const auto add_color = [ &out ]( const std::string& name, config::col& value )
@@ -501,6 +519,7 @@ namespace scripting {
 
 				auto& aa = settings::g_combat.m_antiaim;
 				add_bool( "antiaim.enabled", aa.enabled );
+				add_enum( "antiaim.pitch", aa.pitch, 2 ); add_enum( "antiaim.yaw", aa.yaw, 1 ); add_enum( "antiaim.yaw_pattern", aa.yaw_pattern_mode, 2 );
 				add_bool( "antiaim.auto_yaw_adjust", aa.auto_yaw_adjust ); add_bool( "antiaim.manual_left", aa.manual_left );
 				add_bool( "antiaim.manual_right", aa.manual_right ); add_bool( "antiaim.hide_shots", aa.hide_shots );
 				add_bool( "antiaim.avoid_backstab", aa.avoid_backstab ); add_bool( "antiaim.direction_indicator", aa.direction_indicator );
@@ -1300,6 +1319,7 @@ namespace scripting {
 					{
 					case api_setting_kind::boolean: return sol::make_object( lua_view, *static_cast<bool*>( setting->value ) );
 					case api_setting_kind::integer: return sol::make_object( lua_view, *static_cast<int*>( setting->value ) );
+					case api_setting_kind::enumeration: return sol::make_object( lua_view, enum_value( setting->value ) );
 					case api_setting_kind::decimal: return sol::make_object( lua_view, *static_cast<float*>( setting->value ) );
 					case api_setting_kind::color: return sol::make_object( lua_view, *static_cast<xdraw::color*>( setting->value ) );
 					case api_setting_kind::string: return sol::make_object( lua_view, *static_cast<std::string*>( setting->value ) );
@@ -1317,6 +1337,9 @@ namespace scripting {
 						return true;
 					case api_setting_kind::integer:
 						if ( !value.is<int>( ) ) return false; *static_cast<int*>( setting->value ) = value.as<int>( ); return true;
+					case api_setting_kind::enumeration:
+						if ( !value.is<int>( ) ) return false;
+						set_enum_value( setting->value, value.as<int>( ), setting->maximum ); return true;
 					case api_setting_kind::decimal:
 						if ( !value.is<double>( ) && !value.is<float>( ) && !value.is<int>( ) ) return false;
 						*static_cast<float*>( setting->value ) = value.as<float>( ); return true;
@@ -1551,6 +1574,7 @@ namespace scripting {
 
 		void unload( script& entry )
 		{
+			if ( entry.lua ) invoke( entry, "unload" );
 			clear_ui( entry );
 			entry.callbacks.clear( );
 			entry.scheduled.clear( );

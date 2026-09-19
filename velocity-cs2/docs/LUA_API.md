@@ -286,11 +286,14 @@ C:\velocity-pro\luas
 | ---------------- | ------------------------- | --------- | ------------ |
 | `paint`          | `on_paint()`              | 无         | 每个渲染帧        |
 | `menu`           | `on_menu()`               | 无         | 绘制 Lua 菜单页面时 |
+
 | `create_move_pre` | `on_create_move_pre(command)` | `command` | 内置功能运行前       |
 | `create_move`    | `on_create_move(command)` | `command` | 内置功能运行后       |
 | `create_move_post` | `on_create_move_post(command)` | `command` | 命令序列化前       |
 | `level_init`     | `on_level_init(map_name)` | string    | 地图开始加载       |
 | `level_shutdown` | `on_level_shutdown()`     | 无         | 地图卸载         |
+
+脚本卸载或重载前会调用可选的 `on_unload()`，然后销毁 Lua 状态和脚本 UI。适合在脚本修改了全局配置时恢复临时状态。
 
 ```lua
 velocity.on("paint", function()
@@ -405,7 +408,7 @@ end)
 
 ## 配置控制 API
 
-`velocity.config` 可读写已注册的模块开关、整数、浮点数、颜色和字符串。
+`velocity.config` 可读写已注册的模块开关、整数、枚举、浮点数、颜色和字符串。
 
 ```lua
 velocity.config.exists(name)                  -- boolean
@@ -608,6 +611,9 @@ legitbot.<group>.min_damage                     integer
 antiaim.spin_speed                              number
 antiaim.jitter_range                            number
 antiaim.jitter_speed                            number
+antiaim.pitch                                   integer (0=None, 1=Down, 2=Up)
+antiaim.yaw                                     integer (0=At target, 1=Local view)
+antiaim.yaw_pattern                              integer (0=Backwards, 1=Spin, 2=Jitter)
 combat.max_backtrack_ticks                      integer
 combat.max_extrapolate_ticks                    integer
 movement.edgebug_mode                           integer
