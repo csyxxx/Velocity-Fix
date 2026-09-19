@@ -4087,8 +4087,10 @@ namespace features::combat {
 		// spread instead of being reconstructed later from view angles.
 		math::vector3 trajectory_direction{};
 		auto committed_damage = tgt.hit.damage;
+		auto committed_raw_damage = 0.0f;
 		auto committed_hitgroup = tgt.hit.hitgroup;
 		auto committed_hitbox = tgt.hit.hitbox;
+		auto committed_wall_count = tgt.hit.penetrated ? 1 : 0;
 		auto committed_penetrated = tgt.hit.penetrated;
 
 			const auto commit_verified_result = [ & ]( const shared::penetration::result& verified,
@@ -4123,7 +4125,9 @@ namespace features::combat {
 				}
 
 				committed_damage = verified.damage;
+				committed_raw_damage = verified.raw_damage;
 				committed_hitgroup = verified.hitgroup;
+				committed_wall_count = verified.wall_count;
 				committed_penetrated = verified.penetrated;
 
 				for ( const auto& hitbox : penetration_context.hitboxes )
@@ -4718,7 +4722,7 @@ namespace features::combat {
 #if defined( DEV )
 		diag::writef(
 			diag::level::info,
-			"[rage_commit] pawn=%llx record=%d extrapolated=%u requested_hitbox=%d committed_hitbox=%d requested_group=%d committed_group=%d penetrated=%u damage=%.1f eye=(%.2f,%.2f,%.2f) aim=(%.2f,%.2f,%.2f) target_origin=(%.2f,%.2f,%.2f)",
+			"[rage_commit] pawn=%llx record=%d extrapolated=%u requested_hitbox=%d committed_hitbox=%d requested_group=%d committed_group=%d penetrated=%u walls=%d raw_damage=%.1f damage=%.1f eye=(%.2f,%.2f,%.2f) aim=(%.2f,%.2f,%.2f) target_origin=(%.2f,%.2f,%.2f)",
 			static_cast< unsigned long long >( tgt.hit.pawn ),
 			fire_record ? fire_record->tick : -1,
 			fire_record && fire_record->extrapolated ? 1u : 0u,
@@ -4727,6 +4731,8 @@ namespace features::combat {
 			tgt.hit.hitgroup,
 			committed_hitgroup,
 			committed_penetrated ? 1u : 0u,
+			committed_wall_count,
+			committed_raw_damage,
 			committed_damage,
 			shoot_eye.x, shoot_eye.y, shoot_eye.z,
 			aim_position.x, aim_position.y, aim_position.z,

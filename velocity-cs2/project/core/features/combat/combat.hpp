@@ -127,8 +127,10 @@ namespace features::combat {
 			struct result
 			{
 				float damage{};
+				float raw_damage{};
 				int hitbox{ -1 };
 				int hitgroup{ -1 };
+				int wall_count{};
 				bool penetrated{};
 			};
 

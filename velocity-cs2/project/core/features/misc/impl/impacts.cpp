@@ -209,6 +209,19 @@ namespace features::misc {
 			return;
 		}
 
+#if defined( DEV )
+		diag::writef(
+			diag::level::info,
+			"[rage_hurt] pawn=%llx actual_damage=%d expected_damage=%.1f actual_group=%d expected_group=%d health=%d aimbot=%u",
+			static_cast< unsigned long long >( data.victim_pawn ),
+			data.damage,
+			data.expected_damage,
+			data.hitgroup,
+			data.expected_hitgroup,
+			data.health,
+			data.was_aimbot ? 1u : 0u );
+#endif
+
 		const auto& cfg = settings::g_misc.m_impacts;
 		const auto is_kill = data.health <= 0;
 

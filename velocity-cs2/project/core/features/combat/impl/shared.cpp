@@ -37,6 +37,12 @@ namespace features::combat {
 
 		static_assert( sizeof( bullet_trace_record ) == 0x18 );
 
+		struct trace_hitbox_data
+		{
+			int hitgroup;
+			int hitbox_id;
+		};
+
 		template <typename Fn>
 		auto guarded( Fn&& fn ) -> decltype( fn( ) )
 		{
@@ -312,8 +318,10 @@ namespace features::combat {
 			};
 
 			auto current_phase = phase::flying;
-			auto last_damage{ 0.0f };
+			auto target_damage{ 0.0f };
 			auto wall_hits{ 0 };
+			auto engine_hitbox{ -1 };
+			auto engine_hitgroup{ -1 };
 
 			for ( auto i = 0; i < num_hits; ++i )
 			{
@@ -325,8 +333,6 @@ namespace features::combat {
 					current_phase = phase::spent;
 					break;
 				}
-
-				last_damage = damage;
 
 				if ( ( hit->can_penetrate & 1u ) != 0 )
 				{
@@ -352,18 +358,28 @@ namespace features::combat {
 				}
 
 				const auto trace_holder = surface_array + sizeof( systems::tracing::trace_array_element ) * contact_index;
-				const auto hit_handle = memory::read<std::uint32_t>( trace_holder + 0x2c );
-				if ( hit_handle == 0 || hit_handle == 0xffffffffu )
-				{
-					if ( wall_hits == 0 )
+				systems::tracing::result finalized{};
+				const auto finalized_ok = detail::guarded( [ & ]( )
 					{
-						current_phase = phase::blocked;
-						break;
+						systems::g_tracing.init_result( &finalized );
+						systems::g_tracing.finalize_trace(
+							trace,
+							&finalized,
+							0.0f,
+							reinterpret_cast< void* >( trace_holder ) );
+						return true;
+					} );
+
+				auto hit_entity = finalized_ok ? finalized.hit_entity : 0;
+				if ( !hit_entity )
+				{
+					const auto hit_handle = memory::read<std::uint32_t>( trace_holder + 0x2c );
+					if ( hit_handle != 0 && hit_handle != 0xffffffffu )
+					{
+						hit_entity = systems::g_entities.lookup( hit_handle );
 					}
-					continue;
 				}
 
-				const auto hit_entity = systems::g_entities.lookup( hit_handle );
 				if ( !hit_entity )
 				{
 					if ( wall_hits == 0 )
@@ -384,13 +400,36 @@ namespace features::combat {
 					continue;
 				}
 
+				target_damage = damage;
+				if ( finalized_ok && finalized.hitbox_data )
+				{
+					const auto hitbox_data = memory::safe_read<detail::trace_hitbox_data>(
+						reinterpret_cast< std::uintptr_t >( finalized.hitbox_data ) );
+					if ( hitbox_data )
+					{
+						if ( hitbox_data->hitbox_id >= 0 &&
+							hitbox_data->hitbox_id < static_cast< int >( ctx.hitboxes.entries.size( ) ) )
+						{
+							engine_hitbox = hitbox_data->hitbox_id;
+						}
+						if ( hitbox_data->hitgroup > 0 && hitbox_data->hitgroup < 9 )
+						{
+							engine_hitgroup = hitbox_data->hitgroup;
+						}
+					}
+				}
+
 				current_phase = phase::struck;
 				break;
 			}
 
 			if ( current_phase == phase::struck )
 			{
-				if ( actual_hitbox < 0 )
+				if ( engine_hitbox >= 0 )
+				{
+					actual_hitbox = engine_hitbox;
+				}
+				else if ( actual_hitbox < 0 )
 				{
 					actual_hitbox = fallback_hitbox;
 				}
@@ -400,7 +439,9 @@ namespace features::combat {
 					return false;
 				}
 
-				const auto hitgroup = systems::g_hitboxes.hitgroup_from_hitbox( actual_hitbox );
+				const auto hitgroup = engine_hitgroup > 0
+					? engine_hitgroup
+					: systems::g_hitboxes.hitgroup_from_hitbox( actual_hitbox );
 				if ( hitgroup <= 0 )
 				{
 					return false;
@@ -408,8 +449,10 @@ namespace features::combat {
 
 				out.hitbox = actual_hitbox;
 				out.hitgroup = hitgroup;
+				out.wall_count = wall_hits;
 				out.penetrated = wall_hits > 0;
-				out.damage = last_damage;
+				out.raw_damage = target_damage;
+				out.damage = target_damage;
 				this->scale_damage(
 					out.hitgroup,
 					ctx.target_armor,
