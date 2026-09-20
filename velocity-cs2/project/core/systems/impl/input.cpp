@@ -344,32 +344,54 @@ namespace systems {
 
 	bool input::set_shoot_position( usercmd* cmd, proto::input_history_entry* entry, const math::vector3& position ) const
 	{
+		const auto fail = [ & ]( const char* reason )
+		{
+#if defined( DEV )
+			static std::atomic_uint32_t failure_count{};
+			const auto count = failure_count.fetch_add( 1, std::memory_order_relaxed );
+			if ( count < 32 || ( count & 0xffu ) == 0 )
+			{
+				diag::writef(
+					diag::level::warning,
+					"[input_shoot_position] reason=%s cmd=%lld entry=%p position=(%.2f,%.2f,%.2f)",
+					reason,
+					cmd ? static_cast< long long >( cmd->command_number ) : -1ll,
+					static_cast< void* >( entry ),
+					position.x, position.y, position.z );
+			}
+#else
+			static_cast< void >( reason );
+#endif
+			return false;
+		};
+
 		if ( !cmd || !entry )
 		{
-			return false;
+			return fail( "null_command_or_entry" );
 		}
 
 		if ( !std::isfinite( position.x ) || !std::isfinite( position.y ) ||
 			!std::isfinite( position.z ) || position.length_sqr( ) < 1.0f )
 		{
-			return false;
+			return fail( "invalid_position" );
 		}
 
 		auto history_field = cmd->csgo_user_cmd.mutable_input_history( );
 		if ( !history_field )
 		{
-			return false;
+			return fail( "missing_history_field" );
 		}
 
 		const auto arena = resolve_history_arena( history_field->m_arena );
 		if ( !arena )
 		{
-			return false;
+			return fail( "missing_history_arena" );
 		}
 
 		if ( !entry->m_shoot_position )
 		{
 			proto::msg_vector* prototype{ nullptr };
+			proto::msg_qangle* qangle_prototype{ nullptr };
 			const auto inspect_candidate = [ & ]( proto::input_history_entry* candidate )
 			{
 				if ( !candidate )
@@ -390,6 +412,15 @@ namespace systems {
 				else if ( candidate->m_target_abs_pos_check )
 				{
 					prototype = candidate->m_target_abs_pos_check;
+				}
+
+				// Some command builds do not allocate CMsgVector fields until the
+				// engine's cheat-check path touches them. CMsgQAngle has the same
+				// x/y/z wire fields and can bootstrap an independent message on the
+				// same arena for shoot_position.
+				if ( !prototype && !qangle_prototype && candidate->m_view_angles )
+				{
+					qangle_prototype = candidate->m_view_angles;
 				}
 			};
 
@@ -412,15 +443,22 @@ namespace systems {
 				prototype = this->m_shoot_position_prototype;
 			}
 
-			if ( !prototype )
+			if ( prototype )
 			{
-				return false;
+				entry->m_shoot_position = allocate_history_message( prototype, *arena );
+			}
+			else if ( qangle_prototype )
+			{
+				// The first history entry may only expose its view-angle message.
+				// Allocate through that message's arena-aware vtable, then use the
+				// common x/y/z implementation layout for the vector payload.
+				const auto raw = allocate_history_message( qangle_prototype, *arena );
+				entry->m_shoot_position = reinterpret_cast< proto::msg_vector* >( raw );
 			}
 
-			entry->m_shoot_position = allocate_history_message( prototype, *arena );
 			if ( !entry->m_shoot_position )
 			{
-				return false;
+				return fail( "missing_vector_prototype" );
 			}
 
 			this->m_shoot_position_prototype = entry->m_shoot_position;
@@ -435,7 +473,7 @@ namespace systems {
 			return true;
 		}
 
-		return false;
+		return fail( "mutable_vector_failed" );
 	}
 
 	proto::input_history_entry* input::push_input_history( usercmd* cmd, const input_history_params& params ) const

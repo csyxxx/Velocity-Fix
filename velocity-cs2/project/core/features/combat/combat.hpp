@@ -709,6 +709,8 @@ namespace features::combat {
 		std::uint32_t m_protected_consumed_server_angle_changes{};
 		math::vector3 m_protected_shot_angle{};
 		math::vector3 m_protected_command_angle{};
+		math::vector3 m_protected_shot_position{};
+		bool m_protected_has_shot_position{};
 		std::uint8_t m_air_stop_settle_ticks{};
 		bool m_doubletap_release_pending{};
 		double_tap m_double_tap{};

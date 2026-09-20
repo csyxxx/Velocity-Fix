@@ -528,6 +528,8 @@ namespace features::combat {
 		this->m_protected_shot_command = -1;
 		this->m_protected_shot_history_index = -1;
 		this->m_protected_consumed_server_angle_changes = 0;
+		this->m_protected_shot_position = {};
+		this->m_protected_has_shot_position = false;
 		if ( !this->air_stop_enabled( )
 			|| ( systems::g_prediction.pre( ).flags & cstypes::entity_flags::on_ground ) )
 		{
@@ -838,6 +840,34 @@ namespace features::combat {
 			angles->set_x( this->m_protected_shot_angle.x );
 			angles->set_y( this->m_protected_shot_angle.y );
 			angles->set_z( this->m_protected_shot_angle.z );
+		}
+
+		// Scripted command writers can preserve the angle while dropping the
+		// optional shoot-position message. Restore it on the same history entry
+		// before the command CRC is generated.
+		if ( this->m_protected_has_shot_position && !entry->shoot_position( ) )
+		{
+			static_cast< void >( systems::g_input.set_shoot_position(
+				cmd, entry, this->m_protected_shot_position ) );
+		}
+		if ( !entry->shoot_position( ) )
+		{
+			cmd->buttons.value &= ~( cstypes::command_buttons::in_attack | cstypes::command_buttons::in_second_attack );
+			cmd->buttons.value_changed |= cstypes::command_buttons::in_attack | cstypes::command_buttons::in_second_attack;
+			cmd->buttons.value_scroll &= ~( cstypes::command_buttons::in_attack | cstypes::command_buttons::in_second_attack );
+			cmd->csgo_user_cmd.set_attack1_start_history_index( -1 );
+			cmd->csgo_user_cmd.set_attack2_start_history_index( -1 );
+			this->m_firing_this_tick = false;
+			features::misc::g_impacts.discard_last_uncommitted_shot( );
+#if defined( DEV )
+			diag::writef(
+				diag::level::warning,
+				"[rage_shot_final_reject] reason=shoot_position_missing cmd=%lld history=%d index=%d",
+				static_cast< long long >( cmd->command_number ),
+				history_size,
+				this->m_protected_shot_history_index );
+#endif
+			return;
 		}
 
 		const auto& config = settings::g_combat.m_ragebot.get_group( g_shared.ctx( ).weapon_type );
@@ -4860,6 +4890,7 @@ namespace features::combat {
 #endif
 
 		const auto history_size = cmd->csgo_user_cmd.input_history_size( );
+		bool shot_position_valid = history_size > 0;
 	#if defined( DEV )
 		if ( config.no_spread.value )
 		{
@@ -4919,6 +4950,7 @@ namespace features::combat {
 			if ( i == shot_history_index )
 			{
 				const auto shoot_position_written = systems::g_input.set_shoot_position( cmd, entry, shoot_eye );
+				shot_position_valid = shoot_position_written && entry->shoot_position( ) != nullptr;
 #if defined( DEV )
 				diag::writef(
 					diag::level::info,
@@ -4984,6 +5016,24 @@ namespace features::combat {
 
 				entry->set_target_ent_index( tgt.hit.entity_index );
 			}
+		}
+
+		// An attack without a serialized shoot position is a malformed shot. Do
+		// not leave the attack button active: the caller will remove it and the
+		// impact tracker will discard the provisional shot.
+		if ( !shot_position_valid )
+		{
+#if defined( DEV )
+			diag::writef(
+				diag::level::warning,
+				"[rage_fire_reject] reason=shoot_position_not_serialized cmd=%lld history=%d index=%d eye=(%.2f,%.2f,%.2f)",
+				static_cast< long long >( cmd->command_number ),
+				history_size,
+				shot_history_index,
+				shoot_eye.x, shoot_eye.y, shoot_eye.z );
+#endif
+			this->m_firing_this_tick = false;
+			return;
 		}
 
 #if defined( DEV )
@@ -5096,6 +5146,8 @@ namespace features::combat {
 			this->m_protected_consumed_server_angle_changes = base->consumed_server_angle_changes( );
 			this->m_protected_shot_angle = submitted_angle;
 			this->m_protected_command_angle = command_aim;
+			this->m_protected_shot_position = shoot_eye;
+			this->m_protected_has_shot_position = true;
 		}
 	}
 
