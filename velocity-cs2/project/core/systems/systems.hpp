@@ -414,19 +414,28 @@ namespace systems {
 			void* surface;
 			std::uintptr_t hit_entity;
 			void* hitbox_data;
-			std::byte pad0[ 0x38 ];
+			std::byte pad0[ 0x10 ];
 			std::uint32_t contents;
-			std::byte pad1[ 0x24 ];
+			std::byte pad1[ 0x4c ];
 			math::vector3 start_pos;
 			math::vector3 end_pos;
 			math::vector3 normal;
 			math::vector3 position;
-			std::byte pad2[ 0x4 ];
+			std::uint32_t unknown_a8;
 			float fraction;
-			std::byte pad3[ 0x6 ];
+			std::uint64_t unknown_b0;
+			std::uint16_t unknown_b8;
+			bool start_solid;
 			bool all_solid;
-			std::byte pad4[ 0x4d ];
+			std::byte pad2[ 0x4 ];
 		};
+
+		static_assert( offsetof( result, contents ) == 0x28 );
+		static_assert( offsetof( result, start_pos ) == 0x78 );
+		static_assert( offsetof( result, fraction ) == 0xac );
+		static_assert( offsetof( result, start_solid ) == 0xba );
+		static_assert( offsetof( result, all_solid ) == 0xbb );
+		static_assert( sizeof( result ) == 0xc0 );
 
 		struct trace_array_element
 		{

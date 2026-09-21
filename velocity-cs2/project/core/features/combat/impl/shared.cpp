@@ -39,9 +39,14 @@ namespace features::combat {
 
 		struct trace_hitbox_data
 		{
+			std::byte pad0[ 0x38 ];
 			int hitgroup;
+			std::byte pad1[ 0x4 ];
 			int hitbox_id;
 		};
+
+		static_assert( offsetof( trace_hitbox_data, hitgroup ) == 0x38 );
+		static_assert( offsetof( trace_hitbox_data, hitbox_id ) == 0x40 );
 
 		template <typename Fn>
 		auto guarded( Fn&& fn ) -> decltype( fn( ) )
@@ -258,7 +263,7 @@ namespace features::combat {
 
 			auto actual_hitbox = this->first_hitbox( start, start + trace_delta, ctx );
 
-			auto filter = systems::g_tracing.make_filter( local_pawn, 0x1c300b, 3, 15 );
+			auto filter = systems::g_tracing.make_filter( local_pawn, 0x1c100b, 3, 15 );
 			thread_local systems::tracing::trace_data trace_storage{};
 			trace_storage = {};
 			auto* trace = &trace_storage;
@@ -298,7 +303,7 @@ namespace features::combat {
 						weapon.damage,
 						weapon.penetration,
 						weapon.range_modifier,
-						4,
+						5,
 						local_team,
 						static_cast< std::uintptr_t >( 0 ) );
 					return true;
@@ -346,7 +351,7 @@ namespace features::combat {
 					continue;
 				}
 
-				const auto contact_index = static_cast< std::size_t >( hit->enter_contact_ix & 0x7fffu );
+				const auto contact_index = static_cast< std::size_t >( hit->exit_contact_ix & 0x7fffu );
 				if ( contact_index >= std::size( trace_storage.elements ) )
 				{
 					if ( wall_hits == 0 )
@@ -365,7 +370,7 @@ namespace features::combat {
 						systems::g_tracing.finalize_trace(
 							trace,
 							&finalized,
-							0.0f,
+							hit->enter_fraction,
 							reinterpret_cast< void* >( trace_holder ) );
 						return true;
 					} );
@@ -496,7 +501,7 @@ namespace features::combat {
 
 			const auto trace_delta = ray_direction * weapon.range;
 			const auto local_team = memory::read<int>( local.pawn + SCHEMA( "C_BaseEntity", "m_iTeamNum"_hash ) );
-			auto filter = systems::g_tracing.make_filter( local.pawn, 0x1c300b, 3, 15 );
+			auto filter = systems::g_tracing.make_filter( local.pawn, 0x1c100b, 3, 15 );
 
 			thread_local systems::tracing::trace_data trace_storage{};
 			trace_storage = {};
@@ -531,7 +536,7 @@ namespace features::combat {
 						weapon.damage,
 						weapon.penetration,
 						weapon.range_modifier,
-						4,
+						5,
 						local_team,
 						static_cast< std::uintptr_t >( 0 ) );
 					return true;
