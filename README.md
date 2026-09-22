@@ -10,5 +10,6 @@ velocity pro by Sh1rok0
 - Added lua api
 - shit model changer
 - Added some legit feature
+- Fix backtrack
 
 If u see any shit vibecode edit them pls
